@@ -100,8 +100,10 @@ public:
 
                 sleep(30);
             }
-        } catch (exception &e) {
-            m_logger.error(e.what());
+        } catch (Poco::Exception &e) {
+            m_logger.error("Error while updating status in onl_process");
+            m_logger.error(e.displayText());
+            m_logger.error(e.message());
         }
     }
 
@@ -191,9 +193,49 @@ string RequestHandler::processMsg(string request) {
 
         string mti = msg.getMsgType();
 
-        msg.setField(_038_AUTH_ID_RSP, "DEMO01");
+        long amount = 0;
 
-        msg.setField(_039_RSP_CODE, "00");
+        if (msg.isFieldSet(_004_AMOUNT_TRANSACTION)) {
+            amount = std::atol(msg.getField(_004_AMOUNT_TRANSACTION).c_str());
+        }
+
+        string tran_type = msg.getProcessingCode().getTrantype();
+        if (tran_type.compare("31") == 0) {
+            msg.setField(_038_AUTH_ID_RSP, "DEMO01");
+            msg.setField(_039_RSP_CODE, "00");
+            msg.setField(_054_ADDITIONAL_AMOUNTS, "0002356D0000001200001001356D000000120000");
+        } else if (tran_type.compare("38") == 0) {
+            msg.setField(_038_AUTH_ID_RSP, "DEMO01");
+            msg.setField(_039_RSP_CODE, "00");
+            msg.setField(_054_ADDITIONAL_AMOUNTS, "0002356D0000001200001001356D000000120000");
+            msg.setField(_121_TRAN_DATA_RSP,"00100207002003GDN00500210006385Date        Amt  C/D     Descriptio15/09      10000.00C CDL ATM-[BHR] 15/09      10000.00C CDL ATM-[BHR] 15/09        500.00D WDL.ATM-[BHR] 15/09       1500.00D WDL.ATM-[BHR] 15/09       9500.00C CDL ATM-[BHR] 15/09       2000.00D WDL.ATM-[BHR] 15/09       4000.00D WDL.ATM-[BHR] 15/09       8700.00C CDL ATM-[BHR] 15/09       2000.00D WDL.ATM-[BHR] AVAIL BAL         000053792.08     ");
+        } else if (amount > 0) {
+            amount = std::atol(msg.getField(_004_AMOUNT_TRANSACTION).c_str());
+
+            if (env.compare("P") == 0) {
+                if (amount == 1234) {
+                    msg.setField(_038_AUTH_ID_RSP, "DEMO01");
+                    msg.setField(_039_RSP_CODE, "00");
+                } else {
+                    msg.setField(_039_RSP_CODE, "13");
+                }
+            } else {
+                if (amount < 500) {
+                    msg.setField(_039_RSP_CODE, "13");
+                } else if (amount > 50000000) {
+                    msg.setField(_039_RSP_CODE, "51");
+                } else {
+                    if (msg.isFieldSet(_055_EMV_DATA)) {
+                        msg.setField(_055_EMV_DATA, "8A023030");
+                    }
+                    msg.setField(_038_AUTH_ID_RSP, "DEMO01");
+                    msg.setField(_039_RSP_CODE, "00");
+                }
+            }
+        } else {
+            msg.setField(_038_AUTH_ID_RSP, "DEMO01");
+            msg.setField(_039_RSP_CODE, "01");
+        }
 
         msg.setRspMsgType();
 
@@ -203,6 +245,8 @@ string RequestHandler::processMsg(string request) {
         msg.removeField(_055_EMV_DATA);
 
         m_logger.information(msg.dumpMsg());
+
+        //sleep(1);
 
         resp = msg.toMsg();
     } catch (exception &e) {
