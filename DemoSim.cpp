@@ -183,7 +183,6 @@ private:
 string RequestHandler::processMsg(string request) {
     Iso8583JSON msg;
 
-    //Parser parser;
     string resp("NOK");
 
     try {
@@ -245,8 +244,6 @@ string RequestHandler::processMsg(string request) {
         msg.removeField(_055_EMV_DATA);
 
         m_logger.information(msg.dumpMsg());
-
-        //sleep(1);
 
         resp = msg.toMsg();
     } catch (exception &e) {
