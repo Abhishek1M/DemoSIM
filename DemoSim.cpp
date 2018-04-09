@@ -36,6 +36,10 @@
 
 #include <Poco/NumberParser.h>
 
+#include <Poco/Data/Session.h>
+#include <Poco/Data/SessionFactory.h>
+#include <Poco/Data/ODBC/Connector.h>
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -46,10 +50,12 @@
 #include <ap/constants.h>
 #include <ap/DBManager.h>
 
+using namespace std;
+using std::vector;
+
 using namespace Poco::Net;
 using namespace Poco::Util;
 using Poco::Net::NameValueCollection;
-using namespace std;
 using Poco::CountingInputStream;
 using Poco::NullOutputStream;
 using Poco::StreamCopier;
@@ -70,6 +76,10 @@ using Poco::NumberParser;
 using namespace Poco::JSON;
 using namespace Poco::Dynamic;
 
+//using namespace Poco::Data::Keywords;
+using Poco::Data::Session;
+using Poco::Data::Statement;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int authid;
 string dburl;
@@ -84,21 +94,22 @@ public:
     }
 
     virtual void run() {
+        
         try {
-            DBManager dbm;
+            Session session("ODBC", dburl);
 
-            pqxx::connection c(dburl);
+            if (session.isConnected()) {
+                string query =
+                        "UPDATE onl_process set last_update_datetime=getdate() where pname='" + _modulename + "';";
+                m_logger.information("UPDATE query :"+query);
+                Statement update(session);
+                while (1) {
+                    update << query;
+                    update.execute();
+                    session.commit();
 
-            string query =
-                    "UPDATE onl_process set last_update_datetime=now() where pname='"
-                    + _modulename + "';";
-
-            while (1) {
-                pqxx::work txn(c);
-                txn.exec(query);
-                txn.commit();
-
-                sleep(30);
+                    sleep(30);
+                }
             }
         } catch (Poco::Exception &e) {
             m_logger.error("Error while updating status in onl_process");
@@ -189,6 +200,7 @@ string RequestHandler::processMsg(string request) {
         msg.parseMsg(request);
 
         m_logger.information(msg.dumpMsg());
+        //m_logger.trace(msg.getField(_035_TRACK_2_DATA));
 
         string mti = msg.getMsgType();
 
@@ -207,7 +219,7 @@ string RequestHandler::processMsg(string request) {
             msg.setField(_038_AUTH_ID_RSP, "DEMO01");
             msg.setField(_039_RSP_CODE, "00");
             msg.setField(_054_ADDITIONAL_AMOUNTS, "0002356D0000001200001001356D000000120000");
-            msg.setField(_121_TRAN_DATA_RSP,"00100207002003GDN00500210006385Date        Amt  C/D     Descriptio15/09      10000.00C CDL ATM-[BHR] 15/09      10000.00C CDL ATM-[BHR] 15/09        500.00D WDL.ATM-[BHR] 15/09       1500.00D WDL.ATM-[BHR] 15/09       9500.00C CDL ATM-[BHR] 15/09       2000.00D WDL.ATM-[BHR] 15/09       4000.00D WDL.ATM-[BHR] 15/09       8700.00C CDL ATM-[BHR] 15/09       2000.00D WDL.ATM-[BHR] AVAIL BAL         000053792.08     ");
+            msg.setField(_121_TRAN_DATA_RSP, "00100207002003GDN00500210006385Date        Amt  C/D     Descriptio15/09      10000.00C CDL ATM-[BHR] 15/09      10000.00C CDL ATM-[BHR] 15/09        500.00D WDL.ATM-[BHR] 15/09       1500.00D WDL.ATM-[BHR] 15/09       9500.00C CDL ATM-[BHR] 15/09       2000.00D WDL.ATM-[BHR] 15/09       4000.00D WDL.ATM-[BHR] 15/09       8700.00C CDL ATM-[BHR] 15/09       2000.00D WDL.ATM-[BHR] AVAIL BAL         000053792.08     ");
         } else if (amount > 0) {
             amount = std::atol(msg.getField(_004_AMOUNT_TRANSACTION).c_str());
 
@@ -345,6 +357,8 @@ protected:
 
     int main(const vector<string> &) {
         if (!_helpRequested) {
+            Poco::Data::ODBC::Connector::registerConnector();
+            
             string mq_name = config().getString("mq_name", "NOK");
             string moduleName = config().getString("ModuleName", "NOK");
             string path = config().getString("path", "NOK");
