@@ -12,6 +12,7 @@
 #include <Poco/Net/HTTPServerRequest.h>
 #include <Poco/Net/HTTPServerResponse.h>
 #include <Poco/Util/ServerApplication.h>
+#include <Poco/StringTokenizer.h>
 #include <Poco/Net/HTMLForm.h>
 #include <Poco/Net/PartHandler.h>
 #include <Poco/CountingStream.h>
@@ -94,17 +95,17 @@ public:
     }
 
     virtual void run() {
-        
+
         try {
             Session session("ODBC", dburl);
 
             if (session.isConnected()) {
                 string query =
                         "UPDATE onl_process set last_update_datetime=getdate() where pname='" + _modulename + "';";
-                m_logger.information("UPDATE query :"+query);
+                m_logger.information("UPDATE query :" + query);
                 Statement update(session);
+                update << query;
                 while (1) {
-                    update << query;
                     update.execute();
                     session.commit();
 
@@ -197,10 +198,11 @@ string RequestHandler::processMsg(string request) {
     string resp("NOK");
 
     try {
+        m_logger.trace(request);
+
         msg.parseMsg(request);
 
         m_logger.information(msg.dumpMsg());
-        //m_logger.trace(msg.getField(_035_TRACK_2_DATA));
 
         string mti = msg.getMsgType();
 
@@ -358,12 +360,12 @@ protected:
     int main(const vector<string> &) {
         if (!_helpRequested) {
             Poco::Data::ODBC::Connector::registerConnector();
-            
+
             string mq_name = config().getString("mq_name", "NOK");
             string moduleName = config().getString("ModuleName", "NOK");
             string path = config().getString("path", "NOK");
-            string rotation = config().getString("rotation", "NOK");
-            string archive = config().getString("archive", "NOK");
+            string rotation = config().getString("rotation", "10M");
+            string archive = config().getString("archive", "timestamp");
             string ip = config().getString("IP", "127.0.0.1");
             string times = config().getString("times", "local");
             string compress = config().getString("compress", "true");
